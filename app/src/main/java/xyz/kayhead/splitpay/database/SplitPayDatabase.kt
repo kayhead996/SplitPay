@@ -1,4 +1,4 @@
-package xyz.kayhead.splitpay.Database
+package xyz.kayhead.splitpay.database
 
 import android.arch.persistence.room.Database
 import android.arch.persistence.room.RoomDatabase
