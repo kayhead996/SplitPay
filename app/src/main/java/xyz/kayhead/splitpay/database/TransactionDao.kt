@@ -1,6 +1,7 @@
-package xyz.kayhead.splitpay.entities
+package xyz.kayhead.splitpay.database
 
 import android.arch.persistence.room.*
+import xyz.kayhead.splitpay.entities.Transaction
 
 @Dao
 interface TransactionDao {

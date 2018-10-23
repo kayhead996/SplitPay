@@ -1,10 +1,11 @@
-package xyz.kayhead.splitpay.entities
+package xyz.kayhead.splitpay.database
 
 import android.arch.persistence.room.*
+import xyz.kayhead.splitpay.entities.Item
 
 @Dao
 interface ItemDao {
-    @Query("SELECT * FROM `items` WHERE item_id IN :itemIds")
+    @Query("SELECT * FROM `items` WHERE item_id IN")
     fun getItemsById(vararg itemIds: Int): Array<Item>
 
     @Query("SELECT * FROM `items` WHERE transaction_id = :transactionId")
@@ -13,7 +14,7 @@ interface ItemDao {
     @Update
     fun updateItems(vararg items: Item)
 
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertItems(vararg items: Item)
 
     @Delete

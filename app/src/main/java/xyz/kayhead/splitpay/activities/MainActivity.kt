@@ -1,21 +1,33 @@
 package xyz.kayhead.splitpay.activities
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.support.design.widget.FloatingActionButton
 import android.support.design.widget.NavigationView
+import android.support.v4.content.FileProvider
 import android.support.v4.view.GravityCompat
 import android.support.v4.widget.DrawerLayout
 import android.support.v7.app.ActionBarDrawerToggle
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.Toolbar
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.Toast
+import com.google.firebase.FirebaseApp
+import com.google.firebase.ml.vision.FirebaseVision
 import com.google.firebase.ml.vision.common.FirebaseVisionImage
+import com.google.firebase.ml.vision.text.FirebaseVisionTextRecognizer
 import xyz.kayhead.splitpay.R
 import xyz.kayhead.splitpay.fragments.NewTransactionFragment
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
 
 class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener,
         NewTransactionFragment.OnFragmentInteractionListener {
@@ -23,6 +35,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     private lateinit var fab: FloatingActionButton
     private lateinit var drawer_layout: DrawerLayout
     private lateinit var nav_view: NavigationView
+    private var file: File? = null
 
     companion object {
        const val REQUEST_IMAGE_CAPTURE: Int = 1
@@ -43,6 +56,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         fab.setOnClickListener {
             fragmentManager.beginTransaction().replace(R.id.fragment_parent, NewTransactionFragment.newInstance()).commit()
         }
+
 
         val toggle = ActionBarDrawerToggle(
                 this, drawer_layout, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close)
@@ -104,23 +118,80 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     }
 
     private fun openCamera() {
-        val pictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-        if (pictureIntent.resolveActivity(packageManager) != null) {
-            startActivityForResult(pictureIntent, REQUEST_IMAGE_CAPTURE)
+        val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+
+        if (takePictureIntent.resolveActivity(packageManager) != null) {
+            var photoFile: File? = null
+            try {
+                photoFile = createImageFile()
+            } catch (ex: IOException) {
+                Log.e("Error", ex.message)
+                Toast.makeText(this, "Error creating image file", Toast.LENGTH_SHORT).show()
+            }
+
+            if (photoFile != null) {
+                val photoUri: Uri = FileProvider.getUriForFile(this,
+                        "xyz.kayhead.splitpay.fileprovider",
+                        photoFile)
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
+                startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE)
+            }
+
         }
     }
+
+    @SuppressLint("SimpleDateFormat")
+    @Throws(IOException::class)
+    private fun createImageFile(): File {
+        val timeStamp: String = SimpleDateFormat("yyMMddHHmmssZ").format(java.util.Date())
+        val storageDir: File? = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+
+
+        return File.createTempFile(
+                "SplitPayReceipt_${timeStamp}_",
+                ".jpg",
+                storageDir
+        ).also {
+            file = it.absoluteFile
+        }
+    }
+
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-            processImage(filename)
+            processImage()
         }
     }
 
-    fun processImage(bitmapImage: Bitmap) {
-        val image: FirebaseVisionImage = FirebaseVisionImage.fromBitmap(bitmapImage)
+    private fun processImage() {
+        var image: FirebaseVisionImage? = null
 
+        try {
+            if (file != null) {
+                image = FirebaseVisionImage.fromFilePath(this, FileProvider.getUriForFile(
+                        this,
+                        "xyz.kayhead.splitpay.fileprovider",
+                        file!!
+                ))
+            }
+        } catch (ex: IOException) {
+            Log.e("Error", ex.message)
+            Toast.makeText(this, "Error getting image file", Toast.LENGTH_SHORT).show()
+        }
+        val textRecognizer: FirebaseVisionTextRecognizer = FirebaseVision.getInstance().onDeviceTextRecognizer
+
+        if (image != null) {
+            textRecognizer.processImage(image)
+                    .addOnSuccessListener {
+                        val resultText = it.text
+                        Log.i("Recognized text", resultText)
+                    }
+                    .addOnFailureListener{
+                        Toast.makeText(this, "Image process failed", Toast.LENGTH_SHORT).show()
+                    }
+        }
     }
 
     override fun onButtonPressed(id: Int) {
